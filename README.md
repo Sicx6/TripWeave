@@ -198,20 +198,6 @@ supabase/
 test/                          unit and widget tests
 ```
 
-## Why This Is MVVM
-
-The folder names are not exactly `model`, `view`, and `view_model`, but the responsibility is the same:
-
-```text
-domain/entities        -> Model
-presentation/screens   -> View
-presentation/widgets   -> View
-presentation/providers -> ViewModel / Controller
-data/repositories      -> Repository
-```
-
-This is cleaner than putting everything in `controller`, `model`, `repo`, and `view` globally, because each feature keeps its own files together. For example, trip code stays inside `features/trips`, and expense code stays inside `features/expenses`.
-
 ## Supabase Setup
 
 1. Create a Supabase project.
@@ -256,65 +242,3 @@ flutter build apk --release `
 ```
 
 The release build needs the same `--dart-define` values. If they are missing, the app may open but cannot connect properly to Supabase.
-
-## Launcher Icons
-
-The desired TripWeave icon assets are stored in:
-
-```text
-assets/icon_main.png
-assets/icons/android/
-assets/icons/ios/AppIcon.appiconset/
-```
-
-Android platform icons live in:
-
-```text
-android/app/src/main/res/mipmap-*
-android/app/src/main/res/mipmap-anydpi-v26
-```
-
-iOS platform icons live in:
-
-```text
-ios/Runner/Assets.xcassets/AppIcon.appiconset
-```
-
-After changing launcher icons, uninstall the old app from the emulator/device before reinstalling. Mobile launchers often cache the previous icon.
-
-## Verification
-
-Run static checks and tests:
-
-```powershell
-flutter analyze
-flutter test
-```
-
-There are tests for validation, dashboard rendering, trips/invitations, activity proposals, itinerary, expenses, and money helpers.
-
-## Known Gaps
-
-These are the main areas that should still be hardened before calling the app production-ready:
-
-- Google sign-in is listed in the MVP requirements but is not fully wired into the current Flutter auth UI.
-- Password reset sends the recovery email, but the in-app deep-link screen for setting a new password should be completed before release.
-- Cover images and activity images currently depend on URL/storage flow instead of a polished picker/upload flow everywhere.
-- Live multi-user itinerary updates need runtime verification on two devices or sessions.
-- Push notifications are not implemented yet; current notifications are in-app database notifications.
-- Guest invitation is optional and not fully separated from normal member invitations.
-- Owner permission management exists conceptually through roles, but the UI can still be expanded.
-
-## Learning Notes
-
-When adding a new feature, follow this order:
-
-1. Create the model in `domain/entities`.
-2. Define what the feature needs in `domain/repositories`.
-3. Implement Supabase logic in `data/repositories`.
-4. Create Riverpod providers in `presentation/providers`.
-5. Build the screen in `presentation/screens`.
-6. Add small reusable UI pieces in `presentation/widgets`.
-7. Add or update tests.
-
-That order keeps the app easier to understand because the UI does not talk directly to Supabase. The screen asks the provider, the provider asks the repository, and the repository handles the database.
