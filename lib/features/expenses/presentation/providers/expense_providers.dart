@@ -41,12 +41,15 @@ class ExpenseController extends AsyncNotifier<void> {
     required String tripId,
     required String expenseId,
     required String userId,
+    required String receiptImagePath,
   }) =>
       _run(
         tripId,
         () => _repository.settleSplit(
+          tripId: tripId,
           expenseId: expenseId,
           userId: userId,
+          receiptImagePath: receiptImagePath,
         ),
       );
 

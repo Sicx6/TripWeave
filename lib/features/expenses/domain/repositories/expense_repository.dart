@@ -21,7 +21,9 @@ abstract interface class ExpenseRepository {
     required ExpenseDraft draft,
   });
   Future<void> settleSplit({
+    required String tripId,
     required String expenseId,
     required String userId,
+    required String receiptImagePath,
   });
 }

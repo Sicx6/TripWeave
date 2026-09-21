@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../members/domain/entities/trip_member.dart';
 import '../../../members/presentation/providers/member_providers.dart';
@@ -139,10 +140,17 @@ class ExpensesScreen extends ConsumerWidget {
     Expense expense,
     String userId,
   ) async {
+    final receipt = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+      maxWidth: 1600,
+    );
+    if (!context.mounted || receipt == null) return;
     final success = await ref.read(expenseControllerProvider.notifier).settle(
           tripId: trip.id,
           expenseId: expense.id,
           userId: userId,
+          receiptImagePath: receipt.path,
         );
     if (!context.mounted || success) return;
     final error = ref.read(expenseControllerProvider).error;
@@ -220,30 +228,57 @@ class _ExpenseCard extends StatelessWidget {
           expense.formattedAmount,
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
-        children: expense.splits.map((split) {
-          final isPayer = split.userId == expense.paidBy;
-          final canSettle = !isPayer &&
-              !split.settled &&
-              (split.userId == currentUserId ||
-                  expense.paidBy == currentUserId ||
-                  isOwner);
-          return ListTile(
-            title: Text(names[split.userId] ?? 'Trip member'),
-            subtitle: Text(
-              isPayer
-                  ? 'Payer share'
-                  : split.settled
-                      ? 'Settled'
-                      : 'Unsettled',
-            ),
-            trailing: canSettle
-                ? TextButton(
-                    onPressed: () => onSettle(split.userId),
-                    child: Text('Settle ${formatCents(split.amountCents)}'),
-                  )
-                : Text(formatCents(split.amountCents)),
-          );
-        }).toList(),
+        children: [
+          ...expense.splits.map((split) {
+            final isPayer = split.userId == expense.paidBy;
+            final canSettle = !isPayer &&
+                !split.settled &&
+                (split.userId == currentUserId ||
+                    expense.paidBy == currentUserId ||
+                    isOwner);
+            return ListTile(
+              title: Text(names[split.userId] ?? 'Trip member'),
+              subtitle: Text(
+                isPayer
+                    ? 'Payer share'
+                    : split.settled
+                        ? split.receiptUrl == null
+                            ? 'Settled without receipt proof'
+                            : 'Settled with receipt proof'
+                        : 'Unsettled',
+              ),
+              trailing: canSettle
+                  ? TextButton.icon(
+                      onPressed: () => onSettle(split.userId),
+                      icon: const Icon(Icons.upload_file_rounded),
+                      label: Text('Pay ${formatCents(split.amountCents)}'),
+                    )
+                  : Text(formatCents(split.amountCents)),
+              isThreeLine: split.receiptUrl != null,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              onTap: split.receiptUrl == null
+                  ? null
+                  : () => showDialog<void>(
+                        context: context,
+                        builder: (_) => Dialog(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.network(
+                              split.receiptUrl!,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => const Padding(
+                                padding: EdgeInsets.all(20),
+                                child: Text(
+                                  'Receipt preview is unavailable right now.',
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+            );
+          }),
+        ],
       ),
     );
   }

@@ -3,11 +3,13 @@ class ExpenseSplit {
     required this.userId,
     required this.amountCents,
     required this.settled,
+    this.receiptUrl,
   });
 
   final String userId;
   final int amountCents;
   final bool settled;
+  final String? receiptUrl;
 }
 
 class Expense {
