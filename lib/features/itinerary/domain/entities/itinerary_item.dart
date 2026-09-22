@@ -29,6 +29,8 @@ class ItineraryItem {
     required this.status,
     required this.version,
     this.proposalId,
+    this.latitude,
+    this.longitude,
   });
 
   final String id;
@@ -41,6 +43,10 @@ class ItineraryItem {
   final int position;
   final ItineraryItemStatus status;
   final int version;
+  final double? latitude;
+  final double? longitude;
+
+  bool get hasCoordinates => latitude != null && longitude != null;
 
   bool overlaps(ItineraryItem other) {
     if (status == ItineraryItemStatus.cancelled ||
@@ -49,4 +55,15 @@ class ItineraryItem {
     }
     return startAt.isBefore(other.endAt) && endAt.isAfter(other.startAt);
   }
+}
+
+List<ItineraryItem> findItineraryConflicts({
+  required List<ItineraryItem> items,
+  required DateTime startAt,
+  required DateTime endAt,
+}) {
+  return items.where((item) {
+    if (item.status == ItineraryItemStatus.cancelled) return false;
+    return startAt.isBefore(item.endAt) && endAt.isAfter(item.startAt);
+  }).toList(growable: false);
 }

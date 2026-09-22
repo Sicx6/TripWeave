@@ -25,6 +25,11 @@ class ExpensesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final expenses = ref.watch(expenseListProvider(trip.id));
     final balances = ref.watch(expenseBalanceProvider(trip.id));
+    final budget = ref.watch(
+      expenseBudgetProvider(
+        (tripId: trip.id, budgetCents: trip.budgetCents),
+      ),
+    );
     final members = ref.watch(memberListProvider(trip.id));
     final memberValues = members.valueOrNull ?? const <TripMember>[];
     final names = {
@@ -76,6 +81,13 @@ class ExpensesScreen extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: 22),
+                  budget.when(
+                    loading: () => const LinearProgressIndicator(),
+                    error: (error, _) =>
+                        Text('Unable to calculate trip budget: $error'),
+                    data: (summary) => _BudgetCard(summary: summary),
+                  ),
+                  const SizedBox(height: 28),
                   Text('Balances',
                       style: Theme.of(context).textTheme.headlineSmall),
                   const SizedBox(height: 10),
@@ -120,6 +132,13 @@ class ExpensesScreen extends ConsumerWidget {
                                     isOwner: isOwner,
                                     onSettle: (userId) =>
                                         _settle(context, ref, expense, userId),
+                                    onReview: (userId, approved) => _review(
+                                      context,
+                                      ref,
+                                      expense,
+                                      userId,
+                                      approved,
+                                    ),
                                   ),
                                 )
                                 .toList(),
@@ -152,10 +171,136 @@ class ExpensesScreen extends ConsumerWidget {
           userId: userId,
           receiptImagePath: receipt.path,
         );
-    if (!context.mounted || success) return;
+    if (!context.mounted) return;
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Receipt sent for review.')),
+      );
+      return;
+    }
     final error = ref.read(expenseControllerProvider).error;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(error?.toString() ?? 'Unable to settle split.')),
+    );
+  }
+
+  Future<void> _review(
+    BuildContext context,
+    WidgetRef ref,
+    Expense expense,
+    String userId,
+    bool approved,
+  ) async {
+    String? reason;
+    if (!approved) {
+      reason = await _askForRejectionReason(context);
+      if (reason == null || !context.mounted) return;
+    }
+    final success =
+        await ref.read(expenseControllerProvider.notifier).reviewPaymentProof(
+              tripId: trip.id,
+              expenseId: expense.id,
+              userId: userId,
+              approved: approved,
+              rejectionReason: reason,
+            );
+    if (!context.mounted) return;
+    final message = success
+        ? approved
+            ? 'Payment approved.'
+            : 'Receipt rejected. The member can upload a new one.'
+        : ref.read(expenseControllerProvider).error?.toString() ??
+            'Unable to review payment proof.';
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<String?> _askForRejectionReason(BuildContext context) async {
+    final controller = TextEditingController();
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Reject receipt?'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 200,
+          decoration: const InputDecoration(
+            labelText: 'Reason',
+            hintText: 'For example: amount is not visible',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final reason = controller.text.trim();
+              if (reason.isNotEmpty) Navigator.pop(dialogContext, reason);
+            },
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return value;
+  }
+}
+
+class _BudgetCard extends StatelessWidget {
+  const _BudgetCard({required this.summary});
+
+  final TripBudgetSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasBudget = summary.budgetCents > 0;
+    final progress = summary.progress.clamp(0.0, 1.0);
+    final color = summary.isOverBudget
+        ? Theme.of(context).colorScheme.error
+        : Theme.of(context).colorScheme.primary;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.donut_large_rounded),
+                const SizedBox(width: 10),
+                Text('Trip budget',
+                    style: Theme.of(context).textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              '${formatCents(summary.recordedCents)} recorded of '
+              '${formatCents(summary.budgetCents)}',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 10),
+            LinearProgressIndicator(
+              value: hasBudget ? progress : 0,
+              color: color,
+              minHeight: 8,
+              borderRadius: BorderRadius.circular(99),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              !hasBudget
+                  ? 'Set a trip budget to start tracking spending.'
+                  : summary.isOverBudget
+                      ? '${formatCents(summary.remainingCents.abs())} over budget'
+                      : '${formatCents(summary.remainingCents)} remaining',
+              style: TextStyle(color: color, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -208,6 +353,7 @@ class _ExpenseCard extends StatelessWidget {
     required this.currentUserId,
     required this.isOwner,
     required this.onSettle,
+    required this.onReview,
   });
 
   final Expense expense;
@@ -215,6 +361,7 @@ class _ExpenseCard extends StatelessWidget {
   final String currentUserId;
   final bool isOwner;
   final ValueChanged<String> onSettle;
+  final void Function(String userId, bool approved) onReview;
 
   @override
   Widget build(BuildContext context) {
@@ -231,29 +378,46 @@ class _ExpenseCard extends StatelessWidget {
         children: [
           ...expense.splits.map((split) {
             final isPayer = split.userId == expense.paidBy;
-            final canSettle = !isPayer &&
-                !split.settled &&
+            final canUpload = !isPayer &&
+                split.canUploadReceipt &&
                 (split.userId == currentUserId ||
                     expense.paidBy == currentUserId ||
                     isOwner);
+            final canReview = !isPayer &&
+                split.proofStatus == PaymentProofStatus.pending &&
+                (expense.paidBy == currentUserId || isOwner);
             return ListTile(
               title: Text(names[split.userId] ?? 'Trip member'),
               subtitle: Text(
-                isPayer
-                    ? 'Payer share'
-                    : split.settled
-                        ? split.receiptUrl == null
-                            ? 'Settled without receipt proof'
-                            : 'Settled with receipt proof'
-                        : 'Unsettled',
+                isPayer ? 'Payer share' : _splitDescription(split),
               ),
-              trailing: canSettle
+              trailing: canUpload
                   ? TextButton.icon(
                       onPressed: () => onSettle(split.userId),
                       icon: const Icon(Icons.upload_file_rounded),
-                      label: Text('Pay ${formatCents(split.amountCents)}'),
+                      label: Text(
+                        split.proofStatus == PaymentProofStatus.rejected
+                            ? 'Replace receipt'
+                            : 'Pay ${formatCents(split.amountCents)}',
+                      ),
                     )
-                  : Text(formatCents(split.amountCents)),
+                  : canReview
+                      ? PopupMenuButton<bool>(
+                          tooltip: 'Review receipt',
+                          onSelected: (approved) =>
+                              onReview(split.userId, approved),
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(
+                              value: true,
+                              child: Text('Approve payment'),
+                            ),
+                            PopupMenuItem(
+                              value: false,
+                              child: Text('Reject receipt'),
+                            ),
+                          ],
+                        )
+                      : Text(formatCents(split.amountCents)),
               isThreeLine: split.receiptUrl != null,
               contentPadding: const EdgeInsets.symmetric(horizontal: 16),
               onTap: split.receiptUrl == null
@@ -281,6 +445,17 @@ class _ExpenseCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  static String _splitDescription(ExpenseSplit split) {
+    if (split.proofStatus == PaymentProofStatus.rejected &&
+        split.rejectionReason?.isNotEmpty == true) {
+      return 'Receipt rejected: ${split.rejectionReason}';
+    }
+    if (split.settled && split.receiptUrl == null) {
+      return 'Settled without receipt proof';
+    }
+    return split.proofStatus.label;
   }
 }
 

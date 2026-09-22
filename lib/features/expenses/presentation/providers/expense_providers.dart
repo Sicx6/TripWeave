@@ -19,6 +19,17 @@ final expenseBalanceProvider = Provider.autoDispose
   return ref.watch(expenseListProvider(tripId)).whenData(calculateBalances);
 });
 
+final expenseBudgetProvider = Provider.autoDispose
+    .family<AsyncValue<TripBudgetSummary>, ({String tripId, int budgetCents})>(
+        (ref, input) {
+  return ref.watch(expenseListProvider(input.tripId)).whenData(
+        (expenses) => calculateBudgetSummary(
+          budgetCents: input.budgetCents,
+          expenses: expenses,
+        ),
+      );
+});
+
 final expenseControllerProvider =
     AsyncNotifierProvider<ExpenseController, void>(ExpenseController.new);
 
@@ -50,6 +61,23 @@ class ExpenseController extends AsyncNotifier<void> {
           expenseId: expenseId,
           userId: userId,
           receiptImagePath: receiptImagePath,
+        ),
+      );
+
+  Future<bool> reviewPaymentProof({
+    required String tripId,
+    required String expenseId,
+    required String userId,
+    required bool approved,
+    String? rejectionReason,
+  }) =>
+      _run(
+        tripId,
+        () => _repository.reviewPaymentProof(
+          expenseId: expenseId,
+          userId: userId,
+          approved: approved,
+          rejectionReason: rejectionReason,
         ),
       );
 

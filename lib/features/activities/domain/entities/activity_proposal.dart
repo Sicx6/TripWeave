@@ -47,6 +47,8 @@ class ActivityProposal {
     this.customCategory,
     this.submittedByAvatarUrl,
     this.currentUserVote,
+    this.latitude,
+    this.longitude,
   });
 
   final String id;
@@ -66,11 +68,14 @@ class ActivityProposal {
   final int yesVotes;
   final int noVotes;
   final bool? currentUserVote;
+  final double? latitude;
+  final double? longitude;
   final DateTime createdAt;
   final DateTime updatedAt;
   final int version;
 
   int get totalVotes => yesVotes + noVotes;
+  bool get hasCoordinates => latitude != null && longitude != null;
 
   String get displayCategory =>
       category == 'Custom' && customCategory?.trim().isNotEmpty == true

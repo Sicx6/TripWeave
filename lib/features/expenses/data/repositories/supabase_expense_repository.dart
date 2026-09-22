@@ -100,6 +100,23 @@ class SupabaseExpenseRepository implements ExpenseRepository {
     );
   }
 
+  @override
+  Future<void> reviewPaymentProof({
+    required String expenseId,
+    required String userId,
+    required bool approved,
+    String? rejectionReason,
+  }) =>
+      _client.rpc(
+        'review_expense_payment_proof',
+        params: {
+          'target_expense_id': expenseId,
+          'target_user_id': userId,
+          'approve_proof': approved,
+          'rejection_reason': rejectionReason?.trim(),
+        },
+      );
+
   static Expense _mapExpense(
     Map<String, dynamic> row,
     Iterable<Map<String, dynamic>> splitRows,
@@ -117,7 +134,11 @@ class SupabaseExpenseRepository implements ExpenseRepository {
               userId: split['user_id'] as String,
               amountCents: _databaseMoneyToCents(split['amount']),
               settled: split['settled'] as bool,
+              proofStatus: PaymentProofStatus.fromDatabase(
+                split['receipt_status'] as String?,
+              ),
               receiptUrl: signedReceiptUrls[split['receipt_path'] as String?],
+              rejectionReason: split['receipt_rejection_reason'] as String?,
             ),
           )
           .toList(growable: false),

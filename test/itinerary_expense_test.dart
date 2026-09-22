@@ -18,6 +18,31 @@ void main() {
     expect(first.overlaps(second), isTrue);
   });
 
+  test('finds conflicts but allows back-to-back itinerary items', () {
+    final existing = _item(
+      id: 'existing',
+      start: DateTime(2026, 10, 1, 10),
+      end: DateTime(2026, 10, 1, 12),
+    );
+
+    expect(
+      findItineraryConflicts(
+        items: [existing],
+        startAt: DateTime(2026, 10, 1, 11),
+        endAt: DateTime(2026, 10, 1, 13),
+      ),
+      [existing],
+    );
+    expect(
+      findItineraryConflicts(
+        items: [existing],
+        startAt: DateTime(2026, 10, 1, 12),
+        endAt: DateTime(2026, 10, 1, 13),
+      ),
+      isEmpty,
+    );
+  });
+
   test('equal split preserves every cent', () {
     final splits = splitEqually(1000, ['a', 'b', 'c']);
 
@@ -46,6 +71,66 @@ void main() {
     expect(byUser['owner'], 1000);
     expect(byUser['a'], -1000);
     expect(byUser['b'], 0);
+  });
+
+  test('pending payment proof does not clear a balance', () {
+    final expense = Expense(
+      id: 'expense-1',
+      tripId: 'trip-1',
+      title: 'Dinner',
+      amountCents: 2000,
+      paidBy: 'owner',
+      splits: const [
+        ExpenseSplit(userId: 'owner', amountCents: 1000, settled: false),
+        ExpenseSplit(
+          userId: 'member',
+          amountCents: 1000,
+          settled: false,
+          proofStatus: PaymentProofStatus.pending,
+        ),
+      ],
+      createdAt: DateTime(2026, 10, 1),
+      version: 1,
+    );
+    final balances = calculateBalances([expense]);
+    final byUser = {for (final item in balances) item.userId: item.netCents};
+
+    expect(byUser['owner'], 1000);
+    expect(byUser['member'], -1000);
+  });
+
+  test('budget summary reports remaining and over-budget values', () {
+    final expenses = [
+      Expense(
+        id: 'expense-1',
+        tripId: 'trip-1',
+        title: 'Hotel',
+        amountCents: 7000,
+        paidBy: 'owner',
+        splits: const [],
+        createdAt: DateTime(2026, 10, 1),
+        version: 1,
+      ),
+      Expense(
+        id: 'expense-2',
+        tripId: 'trip-1',
+        title: 'Transport',
+        amountCents: 4000,
+        paidBy: 'owner',
+        splits: const [],
+        createdAt: DateTime(2026, 10, 1),
+        version: 1,
+      ),
+    ];
+
+    final summary = calculateBudgetSummary(
+      budgetCents: 10000,
+      expenses: expenses,
+    );
+
+    expect(summary.recordedCents, 11000);
+    expect(summary.remainingCents, -1000);
+    expect(summary.isOverBudget, isTrue);
   });
 }
 

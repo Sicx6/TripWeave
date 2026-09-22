@@ -3,17 +3,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../activities/domain/entities/activity_proposal.dart';
 import '../../../trips/domain/entities/trip.dart';
+import '../../domain/entities/itinerary_item.dart';
 import '../providers/itinerary_providers.dart';
 
 class ScheduleActivityScreen extends ConsumerStatefulWidget {
   const ScheduleActivityScreen({
     required this.trip,
     required this.approvedProposals,
+    required this.itineraryItems,
     super.key,
   });
 
   final Trip trip;
   final List<ActivityProposal> approvedProposals;
+  final List<ItineraryItem> itineraryItems;
 
   @override
   ConsumerState<ScheduleActivityScreen> createState() =>
@@ -51,6 +54,11 @@ class _ScheduleActivityScreenState
   @override
   Widget build(BuildContext context) {
     final operation = ref.watch(itineraryControllerProvider);
+    final conflicts = findItineraryConflicts(
+      items: widget.itineraryItems,
+      startAt: _combine(_date, _startTime),
+      endAt: _combine(_date, _endTime),
+    );
     return Scaffold(
       appBar: AppBar(title: const Text('Add to itinerary')),
       body: SafeArea(
@@ -118,6 +126,10 @@ class _ScheduleActivityScreenState
                       ),
                     ],
                   ),
+                  if (conflicts.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    _ConflictWarning(conflicts: conflicts),
+                  ],
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
@@ -170,6 +182,36 @@ class _ScheduleActivityScreenState
       );
       return;
     }
+    final conflicts = findItineraryConflicts(
+      items: widget.itineraryItems,
+      startAt: startAt,
+      endAt: endAt,
+    );
+    if (conflicts.isNotEmpty) {
+      final continueScheduling = await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              title: const Text('Schedule conflict'),
+              content: Text(
+                'This overlaps ${conflicts.length} existing '
+                '${conflicts.length == 1 ? 'activity' : 'activities'}. '
+                'Do you still want to add it?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Change time'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Add anyway'),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+      if (!continueScheduling || !mounted) return;
+    }
     final success =
         await ref.read(itineraryControllerProvider.notifier).addProposal(
               tripId: widget.trip.id,
@@ -195,6 +237,49 @@ class _ScheduleActivityScreenState
   static String _formatDate(DateTime date) =>
       '${date.day.toString().padLeft(2, '0')}/'
       '${date.month.toString().padLeft(2, '0')}/${date.year}';
+}
+
+class _ConflictWarning extends StatelessWidget {
+  const _ConflictWarning({required this.conflicts});
+
+  final List<ItineraryItem> conflicts;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.error;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.warning_amber_rounded, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Time conflict detected',
+                  style: TextStyle(color: color, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  conflicts.map((item) => item.title).join(', '),
+                  style: TextStyle(color: color),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ScheduleField extends StatelessWidget {

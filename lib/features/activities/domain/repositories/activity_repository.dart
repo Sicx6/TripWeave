@@ -11,6 +11,8 @@ class ActivityDraft {
     required this.description,
     this.imagePath,
     this.customCategory,
+    this.latitude,
+    this.longitude,
   });
 
   final String title;
@@ -21,6 +23,8 @@ class ActivityDraft {
   final int estimatedCostCents;
   final String description;
   final String? imagePath;
+  final double? latitude;
+  final double? longitude;
 }
 
 abstract interface class ActivityRepository {

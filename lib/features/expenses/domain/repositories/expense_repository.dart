@@ -26,4 +26,10 @@ abstract interface class ExpenseRepository {
     required String userId,
     required String receiptImagePath,
   });
+  Future<void> reviewPaymentProof({
+    required String expenseId,
+    required String userId,
+    required bool approved,
+    String? rejectionReason,
+  });
 }

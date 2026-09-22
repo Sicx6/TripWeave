@@ -1,15 +1,45 @@
+enum PaymentProofStatus {
+  none,
+  pending,
+  approved,
+  rejected;
+
+  String get label => switch (this) {
+        PaymentProofStatus.none => 'Unsettled',
+        PaymentProofStatus.pending => 'Pending review',
+        PaymentProofStatus.approved => 'Payment approved',
+        PaymentProofStatus.rejected => 'Receipt rejected',
+      };
+
+  static PaymentProofStatus fromDatabase(String? value) {
+    return PaymentProofStatus.values.firstWhere(
+      (status) => status.name == value,
+      orElse: () => PaymentProofStatus.none,
+    );
+  }
+}
+
 class ExpenseSplit {
   const ExpenseSplit({
     required this.userId,
     required this.amountCents,
     required this.settled,
+    this.proofStatus = PaymentProofStatus.none,
     this.receiptUrl,
+    this.rejectionReason,
   });
 
   final String userId;
   final int amountCents;
   final bool settled;
+  final PaymentProofStatus proofStatus;
   final String? receiptUrl;
+  final String? rejectionReason;
+
+  bool get canUploadReceipt =>
+      !settled &&
+      (proofStatus == PaymentProofStatus.none ||
+          proofStatus == PaymentProofStatus.rejected);
 }
 
 class Expense {
@@ -44,6 +74,33 @@ class MemberBalance {
 
   bool get isOwedMoney => netCents > 0;
   bool get owesMoney => netCents < 0;
+}
+
+class TripBudgetSummary {
+  const TripBudgetSummary({
+    required this.budgetCents,
+    required this.recordedCents,
+  });
+
+  final int budgetCents;
+  final int recordedCents;
+
+  int get remainingCents => budgetCents - recordedCents;
+  bool get isOverBudget => remainingCents < 0;
+  double get progress => budgetCents <= 0 ? 0 : recordedCents / budgetCents;
+}
+
+TripBudgetSummary calculateBudgetSummary({
+  required int budgetCents,
+  required List<Expense> expenses,
+}) {
+  return TripBudgetSummary(
+    budgetCents: budgetCents,
+    recordedCents: expenses.fold(
+      0,
+      (total, expense) => total + expense.amountCents,
+    ),
+  );
 }
 
 String formatCents(int cents) {

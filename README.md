@@ -97,6 +97,9 @@ Each proposal can include:
 - Description
 - Optional image URL
 - Submitted-by profile information
+- An exact map point selected with `flutter_map`
+- Place/address search with OpenStreetMap search results
+- Optional current-device location, requested only when the user taps it
 - Voting totals
 - Comments
 
@@ -108,7 +111,10 @@ Trip owners can approve proposals so they can be added into the itinerary.
 - Schedule approved suggestions
 - Set start and end time
 - Mark itinerary items as completed
-- Conflict detection support
+- Show live conflict warnings while choosing an activity time
+- Ask for confirmation before saving an overlapping activity
+- Switch between the daily list and an interactive itinerary map
+- Tap map markers to view the activity location, time, and status
 - Version fields in the data model for safer collaborative updates
 
 ### Expenses
@@ -118,7 +124,10 @@ Trip owners can approve proposals so they can be added into the itinerary.
 - Split equally across selected members
 - Store participant split records
 - Show member balances
-- Mark split payments as settled
+- Compare recorded expenses with the trip budget
+- Upload a separate receipt for each member payment
+- Let the payer or trip owner approve or reject payment proof
+- Keep rejected or pending payments in the outstanding balance
 
 ### Notifications
 
@@ -213,6 +222,9 @@ supabase/migrations/202609020004_trip_invitations.sql
 supabase/migrations/202609020005_itinerary_expenses.sql
 supabase/migrations/202609020006_complete_core_mvp.sql
 supabase/migrations/202609020007_suggestion_notifications.sql
+supabase/migrations/202609210001_payment_receipts.sql
+supabase/migrations/202609220001_payment_proof_review.sql
+supabase/migrations/202609220002_activity_map_coordinates.sql
 ```
 
 If Supabase warns that a constraint already exists, it usually means one migration or part of a migration was already applied. Check the existing table first before running destructive SQL.

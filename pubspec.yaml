@@ -39,6 +39,10 @@ dependencies:
   supabase_flutter: ^2.15.4
   image_picker: ^1.1.2
   uuid: ^4.5.1
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  geolocator: ^13.0.4
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
@@ -76,6 +80,9 @@ flutter_launcher_icons:
 # toolchain and uses compile SDK 34 directly.
 dependency_overrides:
   app_links: 6.3.3
+  # 4.6.2 expects flutter.compileSdkVersion, which Flutter 3.24 does not
+  # expose to Android library subprojects. 4.6.1 uses a fixed compatible SDK.
+  geolocator_android: 4.6.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

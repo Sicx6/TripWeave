@@ -49,4 +49,29 @@ void main() {
 
     expect(proposal.displayCategory, 'Photography');
   });
+
+  test('proposal reports when an exact map point is available', () {
+    final proposal = ActivityProposal(
+      id: 'proposal-3',
+      tripId: 'trip-1',
+      proposedBy: 'user-1',
+      submittedByName: 'Ikhwan',
+      title: 'City walk',
+      category: 'Attractions',
+      location: 'Kuala Lumpur',
+      latitude: 3.1390,
+      longitude: 101.6869,
+      proposedAt: DateTime(2026, 10, 1, 9),
+      estimatedCostCents: 0,
+      description: '',
+      status: ProposalStatus.voting,
+      yesVotes: 0,
+      noVotes: 0,
+      createdAt: DateTime(2026, 9, 1),
+      updatedAt: DateTime(2026, 9, 1),
+      version: 1,
+    );
+
+    expect(proposal.hasCoordinates, isTrue);
+  });
 }

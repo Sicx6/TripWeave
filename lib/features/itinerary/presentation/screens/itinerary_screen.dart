@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../../activities/domain/entities/activity_proposal.dart';
 import '../../../activities/presentation/providers/activity_providers.dart';
@@ -7,6 +9,9 @@ import '../../../trips/domain/entities/trip.dart';
 import '../../domain/entities/itinerary_item.dart';
 import '../providers/itinerary_providers.dart';
 import 'schedule_activity_screen.dart';
+
+final _itineraryMapModeProvider =
+    StateProvider.autoDispose.family<bool, String>((ref, tripId) => false);
 
 class ItineraryScreen extends ConsumerWidget {
   const ItineraryScreen({required this.trip, required this.isOwner, super.key});
@@ -18,6 +23,7 @@ class ItineraryScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final items = ref.watch(itineraryListProvider(trip.id));
     final proposals = ref.watch(activityListProvider(trip.id));
+    final showMap = ref.watch(_itineraryMapModeProvider(trip.id));
     return RefreshIndicator(
       onRefresh: () => ref.refresh(itineraryListProvider(trip.id).future),
       child: ListView(
@@ -49,11 +55,31 @@ class ItineraryScreen extends ConsumerWidget {
                           onPressed: () => _openScheduler(
                             context,
                             proposals.valueOrNull ?? const [],
+                            items.valueOrNull ?? const [],
                           ),
                           icon: const Icon(Icons.add_rounded),
                           label: const Text('Add'),
                         ),
                     ],
+                  ),
+                  const SizedBox(height: 14),
+                  SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(
+                        value: false,
+                        icon: Icon(Icons.view_list_outlined),
+                        label: Text('List'),
+                      ),
+                      ButtonSegment(
+                        value: true,
+                        icon: Icon(Icons.map_outlined),
+                        label: Text('Map'),
+                      ),
+                    ],
+                    selected: {showMap},
+                    onSelectionChanged: (selection) => ref
+                        .read(_itineraryMapModeProvider(trip.id).notifier)
+                        .state = selection.first,
                   ),
                   const SizedBox(height: 22),
                   items.when(
@@ -67,16 +93,19 @@ class ItineraryScreen extends ConsumerWidget {
                             onAdd: () => _openScheduler(
                               context,
                               proposals.valueOrNull ?? const [],
+                              const [],
                             ),
                           )
-                        : _ItineraryDays(
-                            items: values,
-                            isOwner: isOwner,
-                            onMove: (index, direction) =>
-                                _move(ref, values, index, direction),
-                            onStatus: (item, status) =>
-                                _changeStatus(context, ref, item, status),
-                          ),
+                        : showMap
+                            ? _ItineraryMap(items: values)
+                            : _ItineraryDays(
+                                items: values,
+                                isOwner: isOwner,
+                                onMove: (index, direction) =>
+                                    _move(ref, values, index, direction),
+                                onStatus: (item, status) =>
+                                    _changeStatus(context, ref, item, status),
+                              ),
                   ),
                 ],
               ),
@@ -90,6 +119,7 @@ class ItineraryScreen extends ConsumerWidget {
   void _openScheduler(
     BuildContext context,
     List<ActivityProposal> proposals,
+    List<ItineraryItem> itineraryItems,
   ) {
     final approved = proposals
         .where((item) => item.status == ProposalStatus.approved)
@@ -107,6 +137,7 @@ class ItineraryScreen extends ConsumerWidget {
         builder: (_) => ScheduleActivityScreen(
           trip: trip,
           approvedProposals: approved,
+          itineraryItems: itineraryItems,
         ),
       ),
     );
@@ -141,6 +172,109 @@ class ItineraryScreen extends ConsumerWidget {
     final error = ref.read(itineraryControllerProvider).error;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(error?.toString() ?? 'Unable to update item.')),
+    );
+  }
+}
+
+class _ItineraryMap extends StatelessWidget {
+  const _ItineraryMap({required this.items});
+
+  final List<ItineraryItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final mappedItems =
+        items.where((item) => item.hasCoordinates).toList(growable: false);
+    if (mappedItems.isEmpty) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'These itinerary activities do not have map points yet. '
+            'New suggestions can choose a point from the activity form.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+    final center = LatLng(
+      mappedItems.first.latitude!,
+      mappedItems.first.longitude!,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: SizedBox(
+            height: 520,
+            child: FlutterMap(
+              options: MapOptions(initialCenter: center, initialZoom: 13),
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.example.tripweave',
+                ),
+                MarkerLayer(
+                  markers: mappedItems
+                      .map(
+                        (item) => Marker(
+                          point: LatLng(item.latitude!, item.longitude!),
+                          width: 48,
+                          height: 48,
+                          child: IconButton.filled(
+                            tooltip: item.title,
+                            onPressed: () => _showActivity(context, item),
+                            icon: const Icon(Icons.location_on),
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                ),
+                const RichAttributionWidget(
+                  attributions: [
+                    TextSourceAttribution('OpenStreetMap contributors'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (mappedItems.length < items.length) ...[
+          const SizedBox(height: 10),
+          Text(
+            '${items.length - mappedItems.length} older '
+            '${items.length - mappedItems.length == 1 ? 'activity has' : 'activities have'} '
+            'no map point.',
+          ),
+        ],
+      ],
+    );
+  }
+
+  void _showActivity(BuildContext context, ItineraryItem item) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(item.title, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            Text(item.location),
+            const SizedBox(height: 6),
+            Text(
+              '${TimeOfDay.fromDateTime(item.startAt).format(context)} – '
+              '${TimeOfDay.fromDateTime(item.endAt).format(context)}',
+            ),
+            const SizedBox(height: 6),
+            Text(item.status.label),
+          ],
+        ),
+      ),
     );
   }
 }

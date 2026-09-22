@@ -3,11 +3,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../../../core/utils/money.dart';
 import '../../../trips/domain/entities/trip.dart';
 import '../../domain/repositories/activity_repository.dart';
 import '../providers/activity_providers.dart';
+import 'activity_location_picker_screen.dart';
 
 class AddActivityScreen extends ConsumerStatefulWidget {
   const AddActivityScreen({required this.trip, super.key});
@@ -38,6 +40,7 @@ class _AddActivityScreenState extends ConsumerState<AddActivityScreen> {
   late DateTime _date;
   TimeOfDay _time = const TimeOfDay(hour: 10, minute: 0);
   String? _imagePath;
+  LatLng? _selectedLocation;
 
   @override
   void initState() {
@@ -132,6 +135,23 @@ class _AddActivityScreenState extends ConsumerState<AddActivityScreen> {
                       validator: (value) => (value?.trim().length ?? 0) < 2
                           ? 'Enter a location'
                           : null,
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _chooseLocationOnMap,
+                        icon: Icon(
+                          _selectedLocation == null
+                              ? Icons.add_location_alt_outlined
+                              : Icons.location_on,
+                        ),
+                        label: Text(
+                          _selectedLocation == null
+                              ? 'Choose point on map'
+                              : 'Map point selected · Change',
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 14),
                     Row(
@@ -232,8 +252,32 @@ class _AddActivityScreenState extends ConsumerState<AddActivityScreen> {
     if (time != null) setState(() => _time = time);
   }
 
+  Future<void> _chooseLocationOnMap() async {
+    final selection = await Navigator.of(context).push<ActivityMapSelection>(
+      MaterialPageRoute(
+        builder: (_) => ActivityLocationPickerScreen(
+          initialLocation: _selectedLocation,
+        ),
+      ),
+    );
+    if (selection != null && mounted) {
+      setState(() {
+        _selectedLocation = selection.point;
+        if (selection.displayName?.isNotEmpty == true) {
+          _location.text = selection.displayName!;
+        }
+      });
+    }
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_selectedLocation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Choose the activity point on the map.')),
+      );
+      return;
+    }
     final proposedAt = DateTime(
       _date.year,
       _date.month,
@@ -250,6 +294,8 @@ class _AddActivityScreenState extends ConsumerState<AddActivityScreen> {
       estimatedCostCents: parseMoneyToCents(_cost.text)!,
       description: _description.text,
       imagePath: _imagePath,
+      latitude: _selectedLocation!.latitude,
+      longitude: _selectedLocation!.longitude,
     );
     final success = await ref
         .read(activityControllerProvider.notifier)

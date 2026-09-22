@@ -70,15 +70,16 @@ class ActivityProposalCard extends StatelessWidget {
                         Text('${proposal.yesVotes}'),
                         const SizedBox(width: 12),
                         Text(proposal.formattedCost),
-                        const Spacer(),
-                        Text(
-                          proposal.status.label,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.primary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+                        // const Spacer(),
                       ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      proposal.status.label,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
                 ),

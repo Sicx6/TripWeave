@@ -70,6 +70,8 @@ class SupabaseItineraryRepository implements ItineraryRepository {
         proposalId: row['proposal_id'] as String?,
         title: row['title'] as String,
         location: row['location'] as String,
+        latitude: (row['latitude'] as num?)?.toDouble(),
+        longitude: (row['longitude'] as num?)?.toDouble(),
         startAt: DateTime.parse(row['start_at'] as String).toLocal(),
         endAt: DateTime.parse(row['end_at'] as String).toLocal(),
         position: row['position'] as int,
